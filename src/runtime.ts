@@ -112,7 +112,10 @@ export async function ensureMergedDependencies(mergedDirectory: string): Promise
 
   const manifest = await loadPackageManifest(mergedDirectory);
   const packageManager = await packageManagerFor(mergedDirectory, manifest);
-  const child = spawn(packageManager, ["install"], {
+  const installArguments = packageManager === "pnpm"
+    ? ["install", "--no-frozen-lockfile"]
+    : ["install"];
+  const child = spawn(packageManager, installArguments, {
     cwd: mergedDirectory,
     env: { ...process.env, CI: "true" },
     stdio: "inherit",
