@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { lstat, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { buildProject, syncProjectFile } from "../src/build.js";
 import { mergeStructured } from "../src/merge.js";
-import { runProjectScript } from "../src/runtime.js";
+import { ensureMergedDependencies, runProjectScript } from "../src/runtime.js";
 import { parseThemeSource } from "../src/source.js";
 
 test("merges objects, override and delete keys, and array insertion keys", () => {
@@ -155,24 +156,60 @@ test("syncs only a changed file without replacing its merged target", async () =
   }
 });
 
-test("run forwards one SIGINT to the package script process group", { timeout: 10_000 }, async () => {
+test("installs dependencies when the merged package.json hash changes", { timeout: 10_000 }, async () => {
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "astro-theme-bridge-"));
   const projectDirectory = path.join(temporaryDirectory, "project");
   const themeDirectory = path.join(temporaryDirectory, "theme");
+  const initialPackage = `${JSON.stringify({ packageManager: "pnpm@10.30.0" })}\n`;
+  const changedPackage = `${JSON.stringify({ packageManager: "pnpm@10.30.0", private: true })}\n`;
 
   try {
     await Promise.all([mkdir(projectDirectory), mkdir(themeDirectory)]);
     await Promise.all([
-      writeFile(
-        path.join(themeDirectory, "package.json"),
-        `${JSON.stringify({
-          packageManager: "pnpm@10.30.0",
-          scripts: { hold: "node -e \"setInterval(() => {}, 1000)\"" },
-        })}\n`,
-      ),
+      writeFile(path.join(themeDirectory, "package.json"), initialPackage),
+      writeFile(path.join(projectDirectory, "astro-theme-bridge.yaml"), `theme: local:${themeDirectory}\n`),
+    ]);
+
+    let result = await buildProject(projectDirectory);
+    assert.equal(await ensureMergedDependencies(result.mergedDirectory), true);
+    assert.equal(await ensureMergedDependencies(result.mergedDirectory), false);
+
+    await writeFile(path.join(themeDirectory, "package.json"), changedPackage);
+    result = await buildProject(projectDirectory);
+    assert.equal(await ensureMergedDependencies(result.mergedDirectory), true);
+    assert.equal(
+      await readFile(path.join(projectDirectory, ".astro-theme-bridge", "package-json.sha256"), "utf8"),
+      `${createHash("sha256").update(changedPackage).digest("hex")}\n`,
+    );
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("run forwards one SIGINT to the package script process group", { timeout: 10_000 }, async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "astro-theme-bridge-"));
+  const projectDirectory = path.join(temporaryDirectory, "project");
+  const themeDirectory = path.join(temporaryDirectory, "theme");
+  const packageContents = `${JSON.stringify({
+    packageManager: "pnpm@10.30.0",
+    scripts: { hold: "node -e \"setInterval(() => {}, 1000)\"" },
+  })}\n`;
+
+  try {
+    await Promise.all([
+      mkdir(projectDirectory, { recursive: true }),
+      mkdir(themeDirectory),
+      mkdir(path.join(projectDirectory, ".astro-theme-bridge"), { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(path.join(themeDirectory, "package.json"), packageContents),
       writeFile(
         path.join(projectDirectory, "astro-theme-bridge.yaml"),
         `theme: local:${themeDirectory}\n`,
+      ),
+      writeFile(
+        path.join(projectDirectory, ".astro-theme-bridge", "package-json.sha256"),
+        `${createHash("sha256").update(packageContents).digest("hex")}\n`,
       ),
     ]);
 

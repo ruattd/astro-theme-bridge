@@ -1,6 +1,6 @@
 {
   "name": "astro-theme-bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Build an Astro project by overlaying local files onto a theme source.",
   "type": "module",
   "author": "ruattd",

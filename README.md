@@ -25,7 +25,7 @@ Use `local:path/to/theme` for a local theme. Local paths are resolved from the p
 
 GitHub themes are cached at `.astro-theme-bridge/github-repo`. `update` discards that cache and clones the configured source again. `build --clean` also removes `merged/node_modules`; a normal build preserves it.
 
-`dev` updates only the changed merged file in place, preserving its path for Astro's file watcher. Changes to bridge configuration files or directory structure trigger a full rebuild because they can affect multiple paths.
+Before `run` or `dev` starts a script, the bridge compares the SHA-256 of merged `package.json` with `.astro-theme-bridge/package-json.sha256`. On the first run or after a change, it installs dependencies using the merged project's package manager, then records the hash. `dev` updates only the changed merged file in place, preserving its path for Astro's file watcher. Changes to bridge configuration files or directory structure trigger a full rebuild because they can affect multiple paths.
 
 ## Overlay rules
 

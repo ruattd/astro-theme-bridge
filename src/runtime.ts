@@ -1,6 +1,7 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import chokidar from "chokidar";
 
 import { bridgePaths, buildProject, syncProjectFile } from "./build.js";
@@ -15,6 +16,8 @@ interface PackageCommand {
   arguments: string[];
 }
 
+const PACKAGE_HASH_FILE = "package-json.sha256";
+
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);
@@ -26,13 +29,20 @@ async function fileExists(filePath: string): Promise<boolean> {
 
 async function loadPackageManifest(mergedDirectory: string): Promise<PackageManifest> {
   const packagePath = path.join(mergedDirectory, "package.json");
+  let contents: string;
   try {
-    return JSON.parse(await readFile(packagePath, "utf8")) as PackageManifest;
+    contents = await readFile(packagePath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new Error(`Merged theme has no package.json at ${packagePath}.`);
     }
 
+    throw new Error(`Could not parse ${packagePath}: ${(error as Error).message}`);
+  }
+
+  try {
+    return JSON.parse(contents) as PackageManifest;
+  } catch (error) {
     throw new Error(`Could not parse ${packagePath}: ${(error as Error).message}`);
   }
 }
@@ -76,6 +86,44 @@ async function packageCommand(mergedDirectory: string, scriptAndArgs: string[]):
     command: packageManager,
     arguments: ["run", script, ...(argumentsForScript.length > 0 ? ["--", ...argumentsForScript] : [])],
   };
+}
+
+async function savedPackageHash(hashPath: string): Promise<string | undefined> {
+  try {
+    return (await readFile(hashPath, "utf8")).trim();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+export async function ensureMergedDependencies(mergedDirectory: string): Promise<boolean> {
+  const packagePath = path.join(mergedDirectory, "package.json");
+  const packageContents = await readFile(packagePath, "utf8");
+  const packageHash = createHash("sha256").update(packageContents).digest("hex");
+  const hashPath = path.join(path.dirname(mergedDirectory), PACKAGE_HASH_FILE);
+
+  if (packageHash === await savedPackageHash(hashPath)) {
+    return false;
+  }
+
+  const manifest = await loadPackageManifest(mergedDirectory);
+  const packageManager = await packageManagerFor(mergedDirectory, manifest);
+  const child = spawn(packageManager, ["install"], {
+    cwd: mergedDirectory,
+    env: { ...process.env, CI: "true" },
+    stdio: "inherit",
+  });
+  const exitCode = await waitForChild(child);
+  if (exitCode !== 0) {
+    throw new Error(`Dependency installation failed with exit code ${exitCode}.`);
+  }
+
+  await writeFile(hashPath, `${packageHash}\n`, "utf8");
+  return true;
 }
 
 export async function startPackageScript(
@@ -140,6 +188,7 @@ async function waitForChildWithInterrupt(child: ChildProcess): Promise<number> {
 
 export async function runProjectScript(projectDirectory: string, scriptAndArgs: string[]): Promise<number> {
   const result = await buildProject(projectDirectory);
+  await ensureMergedDependencies(result.mergedDirectory);
   const child = await startPackageScript(
     result.mergedDirectory,
     scriptAndArgs,
@@ -171,6 +220,7 @@ function needsFullRebuild(event: string, candidate: string): boolean {
 export async function developProject(projectDirectory: string, scriptAndArgs: string[]): Promise<number> {
   const projectRoot = path.resolve(projectDirectory);
   const initialBuild = await buildProject(projectRoot);
+  await ensureMergedDependencies(initialBuild.mergedDirectory);
   const child = await startPackageScript(
     initialBuild.mergedDirectory,
     scriptAndArgs,
