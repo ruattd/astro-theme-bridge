@@ -1,0 +1,41 @@
+{
+  "name": "astro-theme-bridge",
+  "version": "0.1.0",
+  "description": "Build an Astro project by overlaying local files onto a theme source.",
+  "type": "module",
+  "bin": {
+    "astro-theme-bridge": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "keywords": [
+    "astro",
+    "theme",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "commander": "^15.0.0",
+    "ignore": "^7.0.6",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  }
+}
