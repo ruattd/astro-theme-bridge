@@ -166,7 +166,7 @@ test("run forwards one SIGINT to the package script process group", { timeout: 1
       writeFile(
         path.join(themeDirectory, "package.json"),
         `${JSON.stringify({
-          packageManager: "pnpm@10.0.0",
+          packageManager: "pnpm@10.30.0",
           scripts: { hold: "node -e \"setInterval(() => {}, 1000)\"" },
         })}\n`,
       ),

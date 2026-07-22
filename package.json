@@ -3,15 +3,36 @@
   "version": "0.1.0",
   "description": "Build an Astro project by overlaying local files onto a theme source.",
   "type": "module",
+  "author": "ruattd",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ruattd/astro-theme-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ruattd/astro-theme-bridge/issues"
+  },
+  "homepage": "https://github.com/ruattd/astro-theme-bridge#readme",
+  "packageManager": "pnpm@10.30.0",
   "bin": {
     "astro-theme-bridge": "./dist/cli.js"
   },
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
+  "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=22.0.0"
   },
@@ -19,14 +40,15 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/cli.ts",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "verify": "pnpm run check && pnpm test && pnpm run build",
+    "prepublishOnly": "pnpm run verify"
   },
   "keywords": [
     "astro",
     "theme",
     "cli"
   ],
-  "license": "MIT",
   "dependencies": {
     "chokidar": "^5.0.0",
     "commander": "^15.0.0",
